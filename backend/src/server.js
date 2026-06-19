@@ -3,7 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import db from './db/connection.js';
 import authRoutes from './routes/auth.js';
-import leaveRoutes from './routes/leave.js';        // ← NEW
+import leaveRoutes from './routes/leave.js';
+import agentRoutes from './routes/agent.js';                  // ← NEW
 import { authJwt } from './middleware/authJwt.js';
 
 const app = express();
@@ -16,11 +17,10 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/auth', authRoutes);
-app.use('/leave', leaveRoutes);                     // ← NEW
+app.use('/leave', leaveRoutes);
+app.use('/agent', agentRoutes);                                // ← NEW
 
-app.get('/me', authJwt, (req, res) => {
-  res.json({ user: req.user });
-});
+app.get('/me', authJwt, (req, res) => res.json({ user: req.user }));
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 backend on http://localhost:${PORT}`));
