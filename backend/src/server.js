@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import db from './db/connection.js';
 import authRoutes from './routes/auth.js';
+import leaveRoutes from './routes/leave.js';        // ← NEW
 import { authJwt } from './middleware/authJwt.js';
 
 const app = express();
@@ -15,8 +16,8 @@ app.get('/health', (_req, res) => {
 });
 
 app.use('/auth', authRoutes);
+app.use('/leave', leaveRoutes);                     // ← NEW
 
-// Example protected route
 app.get('/me', authJwt, (req, res) => {
   res.json({ user: req.user });
 });
