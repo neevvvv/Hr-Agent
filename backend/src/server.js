@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import db from './db/connection.js';
+import authRoutes from './routes/auth.js';
+import { authJwt } from './middleware/authJwt.js';
 
 const app = express();
 app.use(cors({ origin: 'http://localhost:5173' }));
@@ -10,6 +12,13 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   const row = db.prepare('SELECT COUNT(*) AS n FROM leave_types').get();
   res.json({ status: 'ok', leave_types_seeded: row.n });
+});
+
+app.use('/auth', authRoutes);
+
+// Example protected route
+app.get('/me', authJwt, (req, res) => {
+  res.json({ user: req.user });
 });
 
 const PORT = process.env.PORT || 4000;

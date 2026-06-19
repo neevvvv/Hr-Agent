@@ -1,25 +1,26 @@
-import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+
+function Protected({ children, role }) {
+  const { auth } = useAuth();
+  if (!auth) return <Navigate to="/login" replace />;
+  if (role && auth.user.role !== role) return <Navigate to="/dashboard" replace />;
+  return children;
+}
 
 export default function App() {
-  const [health, setHealth] = useState(null);
-  const [err, setErr] = useState(null);
-
-  useEffect(() => {
-    fetch('http://localhost:4000/health')
-      .then(r => r.json())
-      .then(setHealth)
-      .catch(e => setErr(e.message));
-  }, []);
-
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="bg-white shadow-lg rounded-2xl p-8 max-w-md w-full">
-        <h1 className="text-2xl font-bold text-slate-800">HR Agent — Phase 1</h1>
-        <p className="text-slate-500 mt-1">Backend handshake test</p>
-        <pre className="mt-4 bg-slate-100 rounded p-3 text-sm">
-          {err ? `❌ ${err}` : JSON.stringify(health, null, 2) || 'loading…'}
-        </pre>
-      </div>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+          <Route path="/admin" element={<Protected role="admin"><Dashboard /></Protected>} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
