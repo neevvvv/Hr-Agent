@@ -5,14 +5,14 @@ import { authJwt, requireRole } from '../middleware/authJwt.js';
 
 const router = Router();
 
-// ============================================
-// EMPLOYEE — view my leave balance
-// ============================================
-router.get('/balance', authJwt, (req, res) => {
+// =====================================
+// EMPLOYEE — leave balance
+// =====================================
+router.get('/balance', authJwt, async (req, res) => {
   const year = new Date().getFullYear();
-  const rows = db.prepare(`
-    SELECT lt.code, lt.name, lt.annual_quota, lb.used_days,
-           (lt.annual_quota - lb.used_days) AS remaining
+  const rows = await db.prepare(`
+    SELECT lt.code, lt.name, lt.annual_quota, COALESCE(lb.used_days,0) AS used_days,
+           (lt.annual_quota - COALESCE(lb.used_days,0)) AS remaining
     FROM leave_types lt
     LEFT JOIN leave_balances lb
       ON lb.leave_type_id = lt.id
@@ -23,11 +23,11 @@ router.get('/balance', authJwt, (req, res) => {
   res.json({ year, balances: rows });
 });
 
-// ============================================
-// EMPLOYEE — list my own leave requests
-// ============================================
-router.get('/mine', authJwt, (req, res) => {
-  const rows = db.prepare(`
+// =====================================
+// EMPLOYEE — my requests
+// =====================================
+router.get('/mine', authJwt, async (req, res) => {
+  const rows = await db.prepare(`
     SELECT lr.id, lt.code AS leave_type, lr.start_date, lr.end_date,
            lr.days, lr.reason, lr.status, lr.ai_drafted, lr.created_at
     FROM leave_requests lr
@@ -38,9 +38,9 @@ router.get('/mine', authJwt, (req, res) => {
   res.json({ requests: rows });
 });
 
-// ============================================
-// EMPLOYEE — submit a new leave request
-// ============================================
+// =====================================
+// EMPLOYEE — submit new request
+// =====================================
 const createSchema = z.object({
   leave_type: z.enum(['ANNUAL', 'SICK', 'CASUAL']),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -55,13 +55,13 @@ function businessDaysBetween(startStr, endStr) {
   if (end < start) return -1;
   let days = 0;
   for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    const dow = d.getUTCDay(); // 0=Sun, 6=Sat
+    const dow = d.getUTCDay();
     if (dow !== 0 && dow !== 6) days++;
   }
   return days;
 }
 
-router.post('/', authJwt, (req, res) => {
+router.post('/', authJwt, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.issues });
 
@@ -69,33 +69,34 @@ router.post('/', authJwt, (req, res) => {
   const days = businessDaysBetween(start_date, end_date);
   if (days <= 0) return res.status(400).json({ error: 'end_date must be on or after start_date' });
 
-  const type = db.prepare('SELECT id, annual_quota FROM leave_types WHERE code = ?').get(leave_type);
+  const type = await db.prepare('SELECT id, annual_quota FROM leave_types WHERE code = ?').get(leave_type);
   if (!type) return res.status(400).json({ error: 'Unknown leave type' });
 
   const year = new Date(start_date).getFullYear();
-  const bal = db.prepare(`
+  const bal = await db.prepare(`
     SELECT used_days FROM leave_balances
     WHERE employee_id = ? AND leave_type_id = ? AND year = ?
   `).get(req.user.eid, type.id, year);
-  const used = bal?.used_days ?? 0;
+  const used = Number(bal?.used_days ?? 0);
   const remaining = type.annual_quota - used;
   if (days > remaining) {
     return res.status(400).json({ error: `Not enough balance. Requested ${days}, remaining ${remaining}.` });
   }
 
-  const info = db.prepare(`
-    INSERT INTO leave_requests (employee_id, leave_type_id, start_date, end_date, days, reason, ai_drafted)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(req.user.eid, type.id, start_date, end_date, days, reason ?? null, ai_drafted ? 1 : 0);
+  const result = await db.query(
+    `INSERT INTO leave_requests (employee_id, leave_type_id, start_date, end_date, days, reason, ai_drafted)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+    [req.user.eid, type.id, start_date, end_date, days, reason ?? null, ai_drafted ? true : false]
+  );
 
-  res.status(201).json({ id: info.lastInsertRowid, days, status: 'pending' });
+  res.status(201).json({ id: result.rows[0].id, days, status: 'pending' });
 });
 
-// ============================================
-// ADMIN — list all pending requests
-// ============================================
-router.get('/pending', authJwt, requireRole('admin'), (_req, res) => {
-  const rows = db.prepare(`
+// =====================================
+// ADMIN — pending queue
+// =====================================
+router.get('/pending', authJwt, requireRole('admin'), async (_req, res) => {
+  const rows = await db.prepare(`
     SELECT lr.id, e.full_name AS employee, lt.code AS leave_type,
            lr.start_date, lr.end_date, lr.days, lr.reason, lr.ai_drafted, lr.created_at
     FROM leave_requests lr
@@ -107,40 +108,42 @@ router.get('/pending', authJwt, requireRole('admin'), (_req, res) => {
   res.json({ requests: rows });
 });
 
-// ============================================
-// ADMIN — approve / reject (transactional balance update)
-// ============================================
+// =====================================
+// ADMIN — approve / reject (transactional)
+// =====================================
 const decideSchema = z.object({ decision: z.enum(['approved', 'rejected']) });
 
-router.patch('/:id', authJwt, requireRole('admin'), (req, res) => {
+router.patch('/:id', authJwt, requireRole('admin'), async (req, res) => {
   const id = Number(req.params.id);
   const parsed = decideSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid decision' });
 
-  const reqRow = db.prepare(`
-    SELECT * FROM leave_requests WHERE id = ? AND status = 'pending'
-  `).get(id);
+  const reqRow = await db.prepare(
+    "SELECT * FROM leave_requests WHERE id = ? AND status = 'pending'"
+  ).get(id);
   if (!reqRow) return res.status(404).json({ error: 'Pending request not found' });
 
-  const tx = db.transaction(() => {
-    db.prepare(`
-      UPDATE leave_requests
-      SET status = ?, decided_by = ?, decided_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(parsed.data.decision, req.user.uid, id);
-
-    if (parsed.data.decision === 'approved') {
-      const year = new Date(reqRow.start_date).getFullYear();
-      db.prepare(`
-        INSERT INTO leave_balances (employee_id, leave_type_id, year, used_days)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(employee_id, leave_type_id, year)
-        DO UPDATE SET used_days = used_days + excluded.used_days
-      `).run(reqRow.employee_id, reqRow.leave_type_id, year, reqRow.days);
-    }
-  });
-  tx();
-  res.json({ id, decision: parsed.data.decision });
+  try {
+    await db.transaction(async (client) => {
+      await client.query(
+        `UPDATE leave_requests SET status = $1, decided_by = $2, decided_at = NOW() WHERE id = $3`,
+        [parsed.data.decision, req.user.uid, id]
+      );
+      if (parsed.data.decision === 'approved') {
+        const year = new Date(reqRow.start_date).getFullYear();
+        await client.query(
+          `INSERT INTO leave_balances (employee_id, leave_type_id, year, used_days)
+           VALUES ($1,$2,$3,$4)
+           ON CONFLICT (employee_id, leave_type_id, year)
+           DO UPDATE SET used_days = leave_balances.used_days + EXCLUDED.used_days`,
+          [reqRow.employee_id, reqRow.leave_type_id, year, reqRow.days]
+        );
+      }
+    });
+    res.json({ id, decision: parsed.data.decision });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;

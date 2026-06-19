@@ -1,9 +1,53 @@
-import Database from 'better-sqlite3';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database(path.join(__dirname, '../../hr.db'));
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-export default db;
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+});
+
+pool.on('error', (err) => console.error('PG pool error:', err));
+
+export default {
+  prepare(sql) {
+    let i = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+    return {
+      async get(...params) {
+        const { rows } = await pool.query(pgSql, params);
+        return rows[0] ?? null;
+      },
+      async all(...params) {
+        const { rows } = await pool.query(pgSql, params);
+        return rows;
+      },
+      async run(...params) {
+        const res = await pool.query(pgSql, params);
+        return {
+          changes: res.rowCount,
+          lastInsertRowid: res.rows[0]?.id ?? null,
+        };
+      },
+    };
+  },
+  async query(sql, params = []) {
+    return pool.query(sql, params);
+  },
+  async transaction(fn) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  },
+  pool,
+};

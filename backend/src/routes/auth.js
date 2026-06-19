@@ -11,18 +11,18 @@ const loginSchema = z.object({
   password: z.string().min(6),
 });
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid input' });
 
   const { email, password } = parsed.data;
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
   const ok = bcrypt.compareSync(password, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
-  const emp = db.prepare('SELECT id, full_name FROM employees WHERE user_id = ?').get(user.id);
+  const emp = await db.prepare('SELECT id, full_name FROM employees WHERE user_id = ?').get(user.id);
 
   const token = jwt.sign(
     { uid: user.id, role: user.role, eid: emp?.id, name: emp?.full_name },
