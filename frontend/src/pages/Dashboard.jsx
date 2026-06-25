@@ -5,6 +5,7 @@ import BalanceCards from '../components/BalanceCards';
 import LeaveRequestForm from '../components/LeaveRequestForm';
 import MyRequests from '../components/MyRequests';
 import ChatBox from '../components/ChatBox';        // ← NEW
+import NotificationBell from '../components/NotificationBell';
 
 export default function Dashboard() {
   const { auth, logout } = useAuth();
@@ -39,7 +40,12 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-slate-800">Welcome, {auth.user.name} 👋</h1>
             <p className="text-slate-500 text-sm">Role: {auth.user.role}</p>
           </div>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Logout</button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800 px-3 py-2">
+              Logout
+            </button>
+          </div>
         </div>
 
         {err && <p className="text-red-600 text-sm">❌ {err}</p>}

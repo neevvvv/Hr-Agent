@@ -43,3 +43,17 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   ai_drafted BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,                       -- 'leave_approved', 'leave_rejected', 'new_request', 'system'
+  title TEXT NOT NULL,
+  body TEXT,
+  link TEXT,                                -- optional client-side route
+  read_at TIMESTAMPTZ,                      -- null = unread
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, read_at, created_at DESC);

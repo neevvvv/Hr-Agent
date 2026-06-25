@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../auth/AuthContext';
 import { leaveApi } from '../api/leave';
+import NotificationBell from '../components/NotificationBell';
 
 const typeStyle = {
   ANNUAL: 'bg-emerald-100 text-emerald-800',
-  SICK:   'bg-rose-100 text-rose-800',
+  SICK: 'bg-rose-100 text-rose-800',
   CASUAL: 'bg-amber-100 text-amber-800',
 };
 
@@ -14,7 +16,6 @@ export default function AdminQueue() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState('');
-  const [toast, setToast] = useState('');
 
   const refresh = useCallback(async () => {
     setErr('');
@@ -35,11 +36,10 @@ export default function AdminQueue() {
     setErr('');
     try {
       await leaveApi.decide(auth.token, id, decision);
-      setToast(`Request #${id} ${decision} ✅`);
-      setTimeout(() => setToast(''), 2500);
+      toast.success(`Request #${id} ${decision}`);
       await refresh();
     } catch (e) {
-      setErr(e.message);
+      toast.error(e.message);
     } finally {
       setBusyId(null);
     }
@@ -54,9 +54,19 @@ export default function AdminQueue() {
             <h1 className="text-2xl font-bold text-slate-800">
               HR Approval Queue
             </h1>
-            <p className="text-slate-500 text-sm">Signed in as <strong>{auth.user.name}</strong> · {auth.user.role}</p>
+            <p className="text-slate-500 text-sm">
+              Signed in as <strong>{auth.user.name}</strong> · {auth.user.role}
+            </p>
           </div>
-          <button onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">Logout</button>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <button
+              onClick={logout}
+              className="text-sm text-slate-500 hover:text-slate-800 px-3 py-2"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Stats strip */}
@@ -65,13 +75,15 @@ export default function AdminQueue() {
             <p className="text-xs uppercase text-slate-500 tracking-wider">Pending requests</p>
             <p className="text-3xl font-bold text-slate-800 mt-1">{requests.length}</p>
           </div>
-          <button onClick={refresh} className="text-sm text-slate-500 hover:text-slate-800">
+          <button
+            onClick={refresh}
+            className="text-sm text-slate-500 hover:text-slate-800"
+          >
             🔄 Refresh
           </button>
         </div>
 
         {err && <p className="text-red-600 text-sm">❌ {err}</p>}
-        {toast && <p className="text-emerald-700 text-sm">{toast}</p>}
 
         {/* Queue */}
         {loading ? (
@@ -84,7 +96,10 @@ export default function AdminQueue() {
         ) : (
           <div className="space-y-3">
             {requests.map(r => (
-              <div key={r.id} className="bg-white rounded-2xl shadow p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div
+                key={r.id}
+                className="bg-white rounded-2xl shadow p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+              >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-slate-800">{r.employee}</h3>
@@ -98,12 +113,15 @@ export default function AdminQueue() {
                     ) : null}
                   </div>
                   <p className="text-sm text-slate-600 mt-1">
-                    {r.start_date} → {r.end_date} · <strong>{r.days} day{r.days > 1 ? 's' : ''}</strong>
+                    {r.start_date} → {r.end_date} ·{' '}
+                    <strong>{r.days} day{r.days > 1 ? 's' : ''}</strong>
                   </p>
                   {r.reason && (
                     <p className="text-sm text-slate-500 mt-1 italic">"{r.reason}"</p>
                   )}
-                  <p className="text-xs text-slate-400 mt-1">Submitted {new Date(r.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Submitted {new Date(r.created_at).toLocaleString()}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <button

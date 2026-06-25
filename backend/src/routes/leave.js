@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import db from '../db/connection.js';
 import { authJwt, requireRole } from '../middleware/authJwt.js';
+import { notify, notifyAdmins } from '../services/notifications.js';
 
 const router = Router();
 
@@ -61,6 +62,7 @@ function businessDaysBetween(startStr, endStr) {
   return days;
 }
 
+
 router.post('/', authJwt, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.issues });
@@ -88,6 +90,14 @@ router.post('/', authJwt, async (req, res) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
     [req.user.eid, type.id, start_date, end_date, days, reason ?? null, ai_drafted ? true : false]
   );
+
+  // 🔔 Notify all admins about the new request
+  await notifyAdmins({
+    kind: 'new_request',
+    title: `${req.user.name} submitted a leave request`,
+    body: `${leave_type} · ${start_date} → ${end_date} · ${days} day${days > 1 ? 's' : ''}`,
+    link: '/admin',
+  });
 
   res.status(201).json({ id: result.rows[0].id, days, status: 'pending' });
 });
@@ -140,6 +150,22 @@ router.patch('/:id', authJwt, requireRole('admin'), async (req, res) => {
         );
       }
     });
+
+    // 🔔 Notify the employee about the decision
+    const emp = await db.prepare(
+      'SELECT user_id FROM employees WHERE id = ?'
+    ).get(reqRow.employee_id);
+    if (emp) {
+      await notify(emp.user_id, {
+        kind: parsed.data.decision === 'approved' ? 'leave_approved' : 'leave_rejected',
+        title: parsed.data.decision === 'approved'
+          ? '✅ Your leave was approved'
+          : '❌ Your leave was rejected',
+        body: `Request #${id} · ${reqRow.days} day${reqRow.days > 1 ? 's' : ''}`,
+        link: '/dashboard',
+      });
+    }
+    
     res.json({ id, decision: parsed.data.decision });
   } catch (e) {
     res.status(500).json({ error: e.message });
