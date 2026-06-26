@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hotucide-react';import toast from 'react-hot-toast';
+import toast from 'react-hot-toast';
+import { Brain, ArrowLeft, Plus, Trash2, Sparkles, User as UserIcon, Wand2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { memoryApi } from '../api/memories';
 import NotificationBell from '../components/NotificationBell';
