@@ -3,12 +3,13 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Leave from './pages/Leave';
 import Profile from './pages/Profile';
-import AdminQueue from './pages/AdminQueue';
 import Documents from './pages/Documents';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
 import Memories from './pages/Memories';
+import AdminQueue from './pages/AdminQueue';
 
 function Protected({ children, role }) {
   const { auth } = useAuth();
@@ -25,14 +26,14 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
-          <Route path="/admin" element={<Protected role="admin"><AdminQueue /></Protected>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/leave" element={<Protected><Leave /></Protected>} />
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
           <Route path="/documents" element={<Protected><Documents /></Protected>} />
           <Route path="/tickets" element={<Protected><Tickets /></Protected>} />
           <Route path="/tickets/:id" element={<Protected><TicketDetail /></Protected>} />
           <Route path="/memories" element={<Protected><Memories /></Protected>} />
-
+          <Route path="/admin" element={<Protected role="admin"><AdminQueue /></Protected>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
