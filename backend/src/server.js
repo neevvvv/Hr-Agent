@@ -11,6 +11,7 @@ import profileRoutes from './routes/profile.js';
 import documentRoutes from './routes/documents.js';
 import ticketRoutes from './routes/tickets.js';
 import planRoutes from './routes/plan.js';
+import memoryRoutes from './routes/memories.js';
 
 const app = express();
 
@@ -46,7 +47,8 @@ app.use('/notifications', notificationRoutes);
 app.use('/profile', profileRoutes);           
 app.use('/documents', documentRoutes);      
 app.use('/tickets', ticketRoutes);    
-app.use('/plan', planRoutes);         // ← AND THIS
+app.use('/plan', planRoutes);      
+app.use('/memories', memoryRoutes);      // ← AND THIS
 
 app.get('/me', authJwt, (req, res) => {
   res.json({ user: req.user });

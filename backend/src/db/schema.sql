@@ -157,3 +157,13 @@ CREATE TABLE IF NOT EXISTS agent_plans (
 );
 
 CREATE INDEX IF NOT EXISTS idx_plans_user ON agent_plans(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS memories (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('explicit', 'auto', 'preference')),
+  embedding vector(384),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ
+);

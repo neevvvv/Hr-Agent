@@ -183,6 +183,50 @@ export const tools = [
   },
 
   {
+    name: 'rememberThis',
+    description: "Save a fact, preference, or detail about the user for future conversations. Use when the user says 'remember', 'note that', 'I prefer', 'I usually', 'fyi', etc.",
+    parameters: {
+      type: 'object',
+      properties: {
+        content: {
+          type: 'string',
+          description: 'The fact or preference to remember, phrased in 3rd person (e.g., "User prefers Friday off", "User is allergic to peanuts").',
+        },
+      },
+      required: ['content'],
+    },
+    execute: async (args, ctx) => {
+      const { saveMemory } = await import('../services/memoryStore.js');
+      const id = await saveMemory({
+        userId: ctx.user.uid,
+        content: args.content,
+        source: 'explicit',
+      });
+      return { ok: true, id, content: args.content };
+    },
+  },
+
+  {
+    name: 'recallMemories',
+    description: "Search the user's saved memories for context relevant to their current question. Use this when the user asks about their preferences, history, or anything personal.",
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What to search memories for' },
+      },
+      required: ['query'],
+    },
+    execute: async (args, ctx) => {
+      const { searchMemories } = await import('../services/memoryStore.js');
+      const memories = await searchMemories({
+        userId: ctx.user.uid,
+        query: args.query,
+        limit: 5,
+      });
+      return { count: memories.length, memories };
+    },
+  },
+  {
     name: 'draftTicket',
     description: "Draft a new HR/IT support ticket for the user to review. Categorize their concern correctly. Does NOT submit until user confirms.",
     parameters: {

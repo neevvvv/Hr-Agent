@@ -8,7 +8,7 @@ import AdminQueue from './pages/AdminQueue';
 import Documents from './pages/Documents';
 import Tickets from './pages/Tickets';
 import TicketDetail from './pages/TicketDetail';
-
+import Memories from './pages/Memories';
 
 function Protected({ children, role }) {
   const { auth } = useAuth();
@@ -31,6 +31,7 @@ export default function App() {
           <Route path="/documents" element={<Protected><Documents /></Protected>} />
           <Route path="/tickets" element={<Protected><Tickets /></Protected>} />
           <Route path="/tickets/:id" element={<Protected><TicketDetail /></Protected>} />
+          <Route path="/memories" element={<Protected><Memories /></Protected>} />
 
         </Routes>
       </BrowserRouter>
