@@ -4,7 +4,7 @@ An **agentic AI HR leave management system**. Employees chat with an AI to check
 
 ## 🔗 Live demo
 
-**App**: https://your-app.vercel.app  *(replace with your Vercel URL)*
+**App**: [https://hr-agent-omega.vercel.app/]  *(replace with your Vercel URL)*
 **Code**: https://github.com/neevvvv/hr-agent
 
 ### Demo accounts
