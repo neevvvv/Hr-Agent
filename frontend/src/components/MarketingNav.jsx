@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bot, ExternalLink } from 'lucide-react';
+import { Bot } from 'lucide-react';
 
 export default function MarketingNav() {
   return (
@@ -13,15 +13,6 @@ export default function MarketingNav() {
             <span className="font-bold text-lg text-slate-900 tracking-tight">HR Agent</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
-            <a
-              href="https://github.com/neevvvv/hr-agent"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              GitHub
-            </a>
             <Link
               to="/login"
               className="text-sm font-medium text-slate-700 hover:text-slate-900 px-3 py-1.5 transition-colors"

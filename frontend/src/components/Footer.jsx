@@ -1,4 +1,4 @@
-import { Bot, ExternalLink } from 'lucide-react';
+import { Bot } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -10,13 +10,9 @@ export default function Footer() {
               <Bot className="w-4 h-4 text-white" strokeWidth={2.5} />
             </div>
             <span className="font-semibold text-slate-700">HR Agent</span>
-            <span className="text-slate-400 text-sm hidden sm:inline">· A portfolio project by Neev Sahu</span>
           </div>
           <div className="flex items-center gap-5 text-sm text-slate-500">
-            <a href="https://github.com/neevvvv/hr-agent" target="_blank" rel="noreferrer" className="hover:text-slate-900 flex items-center gap-1.5">
-              <ExternalLink className="w-4 h-4" /> Source
-            </a>
-            <span>© 2026</span>
+            <span>An agentic AI demo</span>
           </div>
         </div>
       </div>
