@@ -213,27 +213,45 @@ router.patch('/:id/status', authJwt, requireRole('admin'), async (req, res) => {
 // =====================================
 // ADMIN — list all tickets (with filter)
 // =====================================
+// =====================================
+// ADMIN — list all active (open + in_progress) tickets, marked with who-spoke-last
+// =====================================
 router.get('/admin/all', authJwt, requireRole('admin'), async (req, res) => {
   const status = req.query.status;
-  const validStatuses = ['open', 'in_progress', 'resolved', 'closed'];
-  const filterByStatus = validStatuses.includes(status);
+  const validStatuses = ['open', 'in_progress', 'resolved', 'closed', 'active'];
+  const filter = validStatuses.includes(status) ? status : 'active';
 
-  const rows = filterByStatus
-    ? await db.prepare(`
-        SELECT t.id, t.category, t.subject, t.status, t.ai_drafted, t.last_activity_at, t.created_at,
-               e.full_name AS employee_name,
-               (SELECT COUNT(*) FROM ticket_messages tm WHERE tm.ticket_id = t.id) AS message_count
-        FROM tickets t JOIN employees e ON e.id = t.employee_id
-        WHERE t.status = ?
-        ORDER BY t.last_activity_at DESC
-      `).all(status)
-    : await db.prepare(`
-        SELECT t.id, t.category, t.subject, t.status, t.ai_drafted, t.last_activity_at, t.created_at,
-               e.full_name AS employee_name,
-               (SELECT COUNT(*) FROM ticket_messages tm WHERE tm.ticket_id = t.id) AS message_count
-        FROM tickets t JOIN employees e ON e.id = t.employee_id
-        ORDER BY t.last_activity_at DESC LIMIT 100
-      `).all();
+  let rows;
+  if (filter === 'active') {
+    // Active = open + in_progress (what HR needs to see day-to-day)
+    rows = await db.prepare(`
+      SELECT t.id, t.category, t.subject, t.status, t.ai_drafted,
+             t.last_activity_at, t.created_at,
+             e.full_name AS employee_name,
+             (SELECT COUNT(*) FROM ticket_messages tm WHERE tm.ticket_id = t.id) AS message_count,
+             (SELECT author_role FROM ticket_messages tm
+              WHERE tm.ticket_id = t.id
+              ORDER BY tm.created_at DESC LIMIT 1) AS last_author
+      FROM tickets t
+      JOIN employees e ON e.id = t.employee_id
+      WHERE t.status IN ('open', 'in_progress')
+      ORDER BY t.last_activity_at DESC
+    `).all();
+  } else {
+    rows = await db.prepare(`
+      SELECT t.id, t.category, t.subject, t.status, t.ai_drafted,
+             t.last_activity_at, t.created_at,
+             e.full_name AS employee_name,
+             (SELECT COUNT(*) FROM ticket_messages tm WHERE tm.ticket_id = t.id) AS message_count,
+             (SELECT author_role FROM ticket_messages tm
+              WHERE tm.ticket_id = t.id
+              ORDER BY tm.created_at DESC LIMIT 1) AS last_author
+      FROM tickets t
+      JOIN employees e ON e.id = t.employee_id
+      WHERE t.status = ?
+      ORDER BY t.last_activity_at DESC
+    `).all(filter);
+  }
 
   res.json({ tickets: rows });
 });

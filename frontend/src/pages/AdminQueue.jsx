@@ -9,24 +9,24 @@ import NotificationBell from '../components/NotificationBell';
 
 const leaveTypeStyle = {
   ANNUAL: 'bg-emerald-100 text-emerald-800',
-  SICK:   'bg-rose-100 text-rose-800',
+  SICK: 'bg-rose-100 text-rose-800',
   CASUAL: 'bg-amber-100 text-amber-800',
 };
 
 const docTypeLabels = {
-  EMPLOYMENT_LETTER:  'Employment Letter',
+  EMPLOYMENT_LETTER: 'Employment Letter',
   SALARY_CERTIFICATE: 'Salary Certificate',
-  EXPERIENCE_LETTER:  'Experience Letter',
-  ADDRESS_PROOF:      'Address Proof',
-  NOC:                'No Objection Certificate',
+  EXPERIENCE_LETTER: 'Experience Letter',
+  ADDRESS_PROOF: 'Address Proof',
+  NOC: 'No Objection Certificate',
 };
 
 const docTypeIcons = {
-  EMPLOYMENT_LETTER:  '💼',
+  EMPLOYMENT_LETTER: '💼',
   SALARY_CERTIFICATE: '💰',
-  EXPERIENCE_LETTER:  '⭐',
-  ADDRESS_PROOF:      '🏠',
-  NOC:                '✅',
+  EXPERIENCE_LETTER: '⭐',
+  ADDRESS_PROOF: '🏠',
+  NOC: '✅',
 };
 
 const ticketCategoryIcons = {
@@ -49,7 +49,7 @@ export default function AdminQueue() {
       const [l, d, t] = await Promise.all([
         leaveApi.pending(auth.token),
         documentApi.pending(auth.token).catch(() => ({ requests: [] })),
-        ticketApi.adminList(auth.token, 'open').catch(() => ({ tickets: [] })),
+        ticketApi.adminList(auth.token, 'active').catch(() => ({ tickets: [] })),
       ]);
       setLeaves(l.requests);
       setDocs(d.requests);
@@ -121,7 +121,7 @@ export default function AdminQueue() {
             <p className="text-xs text-slate-500 mt-1">
               {leaves.length} leave{leaves.length !== 1 ? 's' : ''} ·{' '}
               {docs.length} document{docs.length !== 1 ? 's' : ''} ·{' '}
-              {openTickets.length} ticket{openTickets.length !== 1 ? 's' : ''}
+              {openTickets.length} active ticket{openTickets.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
@@ -148,39 +148,52 @@ export default function AdminQueue() {
             {openTickets.length > 0 && (
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2 flex items-center gap-2">
-                  🎫 Open tickets
+                  🎫 Active tickets
                   <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
                     {openTickets.length}
                   </span>
                 </h2>
-                {openTickets.map(t => (
-                  <div
-                    key={t.id}
-                    onClick={() => nav(`/tickets/${t.id}`)}
-                    className="bg-white rounded-2xl shadow p-5 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="text-3xl">{ticketCategoryIcons[t.category]}</div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-slate-800">{t.subject}</h3>
-                          <span className="text-xs px-2 py-0.5 rounded font-semibold bg-amber-100 text-amber-800">
-                            {t.category}
-                          </span>
-                          {t.ai_drafted && (
-                            <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-semibold">
-                              🤖 AI-drafted
+                {openTickets.map(t => {
+                  const needsReply = t.last_author === 'employee';
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => nav(`/tickets/${t.id}`)}
+                      className={`bg-white rounded-2xl shadow p-5 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow ${needsReply ? 'border-l-4 border-amber-500' : ''
+                        }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="text-3xl">{ticketCategoryIcons[t.category]}</div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-semibold text-slate-800">{t.subject}</h3>
+                            <span className={`text-xs px-2 py-0.5 rounded font-semibold ${t.status === 'open' ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'
+                              }`}>
+                              {t.status.replace('_', ' ')}
                             </span>
-                          )}
+                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
+                              {t.category}
+                            </span>
+                            {needsReply && (
+                              <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold animate-pulse">
+                                💬 Awaiting your reply
+                              </span>
+                            )}
+                            {t.ai_drafted && (
+                              <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-semibold">
+                                🤖 AI-drafted
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-600 mt-1">
+                            From <strong>{t.employee_name}</strong> · #{t.id} · {t.message_count} message{t.message_count > 1 ? 's' : ''}
+                          </p>
                         </div>
-                        <p className="text-sm text-slate-600 mt-1">
-                          From <strong>{t.employee_name}</strong> · #{t.id} · {t.message_count} message{t.message_count > 1 ? 's' : ''}
-                        </p>
                       </div>
+                      <span className="text-sm text-violet-600 font-medium">Open →</span>
                     </div>
-                    <span className="text-sm text-violet-600 font-medium">Open →</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
