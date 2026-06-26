@@ -118,3 +118,30 @@ CREATE TABLE IF NOT EXISTS document_requests (
 
 CREATE INDEX IF NOT EXISTS idx_docs_employee ON document_requests(employee_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_docs_status ON document_requests(status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS tickets (
+  id SERIAL PRIMARY KEY,
+  employee_id INTEGER NOT NULL REFERENCES employees(id),
+  category TEXT NOT NULL CHECK (category IN (
+    'PAYROLL', 'IT', 'BENEFITS', 'POLICY', 'GENERAL'
+  )),
+  subject TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  ai_drafted BOOLEAN NOT NULL DEFAULT FALSE,
+  last_activity_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ticket_messages (
+  id SERIAL PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_user_id INTEGER NOT NULL REFERENCES users(id),
+  author_role TEXT NOT NULL CHECK (author_role IN ('employee', 'admin')),
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tickets_employee ON tickets(employee_id, last_activity_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, last_activity_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_ticket ON ticket_messages(ticket_id, created_at);

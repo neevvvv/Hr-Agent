@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../auth/AuthContext';
 import { leaveApi } from '../api/leave';
 import { documentApi } from '../api/documents';
+import { ticketApi } from '../api/tickets';
 import NotificationBell from '../components/NotificationBell';
 
 const leaveTypeStyle = {
@@ -27,10 +29,16 @@ const docTypeIcons = {
   NOC:                '✅',
 };
 
+const ticketCategoryIcons = {
+  PAYROLL: '💰', IT: '💻', BENEFITS: '🏥', POLICY: '📋', GENERAL: '💬',
+};
+
 export default function AdminQueue() {
   const { auth, logout } = useAuth();
+  const nav = useNavigate();
   const [leaves, setLeaves] = useState([]);
   const [docs, setDocs] = useState([]);
+  const [openTickets, setOpenTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState('');
@@ -38,12 +46,14 @@ export default function AdminQueue() {
   const refresh = useCallback(async () => {
     setErr('');
     try {
-      const [l, d] = await Promise.all([
+      const [l, d, t] = await Promise.all([
         leaveApi.pending(auth.token),
         documentApi.pending(auth.token).catch(() => ({ requests: [] })),
+        ticketApi.adminList(auth.token, 'open').catch(() => ({ tickets: [] })),
       ]);
       setLeaves(l.requests);
       setDocs(d.requests);
+      setOpenTickets(t.tickets);
     } catch (e) {
       setErr(e.message);
     } finally {
@@ -70,9 +80,7 @@ export default function AdminQueue() {
     setBusyId(`doc-${id}`);
     try {
       await documentApi.decide(auth.token, id, decision);
-      toast.success(
-        decision === 'approved' ? `Letter generated for #${id}` : `Document #${id} rejected`
-      );
+      toast.success(decision === 'approved' ? `Letter generated for #${id}` : `Document #${id} rejected`);
       await refresh();
     } catch (e) {
       toast.error(e.message);
@@ -81,7 +89,7 @@ export default function AdminQueue() {
     }
   }
 
-  const totalPending = leaves.length + docs.length;
+  const totalPending = leaves.length + docs.length + openTickets.length;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 sm:p-8">
@@ -111,7 +119,9 @@ export default function AdminQueue() {
             <p className="text-xs uppercase text-slate-500 tracking-wider">Pending items</p>
             <p className="text-3xl font-bold text-slate-800 mt-1">{totalPending}</p>
             <p className="text-xs text-slate-500 mt-1">
-              {leaves.length} leave{leaves.length !== 1 ? 's' : ''} · {docs.length} document{docs.length !== 1 ? 's' : ''}
+              {leaves.length} leave{leaves.length !== 1 ? 's' : ''} ·{' '}
+              {docs.length} document{docs.length !== 1 ? 's' : ''} ·{' '}
+              {openTickets.length} ticket{openTickets.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
@@ -124,7 +134,7 @@ export default function AdminQueue() {
 
         {err && <p className="text-red-600 text-sm">❌ {err}</p>}
 
-        {/* Inbox-zero */}
+        {/* Inbox zero */}
         {loading ? (
           <p className="text-slate-500">Loading…</p>
         ) : totalPending === 0 ? (
@@ -134,10 +144,50 @@ export default function AdminQueue() {
           </div>
         ) : (
           <>
+            {/* TICKETS */}
+            {openTickets.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2 flex items-center gap-2">
+                  🎫 Open tickets
+                  <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
+                    {openTickets.length}
+                  </span>
+                </h2>
+                {openTickets.map(t => (
+                  <div
+                    key={t.id}
+                    onClick={() => nav(`/tickets/${t.id}`)}
+                    className="bg-white rounded-2xl shadow p-5 flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="text-3xl">{ticketCategoryIcons[t.category]}</div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-slate-800">{t.subject}</h3>
+                          <span className="text-xs px-2 py-0.5 rounded font-semibold bg-amber-100 text-amber-800">
+                            {t.category}
+                          </span>
+                          {t.ai_drafted && (
+                            <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-semibold">
+                              🤖 AI-drafted
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-slate-600 mt-1">
+                          From <strong>{t.employee_name}</strong> · #{t.id} · {t.message_count} message{t.message_count > 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm text-violet-600 font-medium">Open →</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* DOCUMENT REQUESTS */}
             {docs.length > 0 && (
               <div className="space-y-3">
-                <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-2 flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mt-4 flex items-center gap-2">
                   📄 Document requests
                   <span className="text-xs bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
                     {docs.length}
@@ -155,11 +205,11 @@ export default function AdminQueue() {
                         <span className="text-xs px-2 py-0.5 rounded font-semibold bg-violet-100 text-violet-800">
                           {docTypeLabels[d.doc_type]}
                         </span>
-                        {d.ai_drafted ? (
+                        {d.ai_drafted && (
                           <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-semibold">
                             🤖 AI-drafted
                           </span>
-                        ) : null}
+                        )}
                       </div>
                       <p className="text-sm text-slate-600 mt-1 italic">"{d.purpose}"</p>
                       <p className="text-xs text-slate-400 mt-1">
@@ -207,11 +257,11 @@ export default function AdminQueue() {
                         <span className={`text-xs px-2 py-0.5 rounded font-semibold ${leaveTypeStyle[r.leave_type]}`}>
                           {r.leave_type}
                         </span>
-                        {r.ai_drafted ? (
+                        {r.ai_drafted && (
                           <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800 font-semibold">
                             🤖 AI-drafted
                           </span>
-                        ) : null}
+                        )}
                       </div>
                       <p className="text-sm text-slate-600 mt-1">
                         {r.start_date} → {r.end_date} ·{' '}

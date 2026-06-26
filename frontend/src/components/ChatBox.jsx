@@ -4,6 +4,7 @@ import { agentApi } from '../api/agent';
 import { leaveApi } from '../api/leave';
 import { profileApi } from '../api/profile';
 import { documentApi } from '../api/documents';
+import { ticketApi } from '../api/tickets';
 
 export default function ChatBox({ onLeaveCreated }) {
   const { auth } = useAuth();
@@ -13,7 +14,7 @@ export default function ChatBox({ onLeaveCreated }) {
     {
       role: 'assistant',
       content:
-        "Hi! I can check your leave balance, draft a leave request, view/update your profile, or request HR letters (employment, salary, experience, NOC). What do you need?",
+        "Hi! I can help with leave, profile updates, HR letters (employment, salary, NOC), and support tickets. What do you need?",
     },
   ]);
   const [busy, setBusy] = useState(false);
@@ -37,22 +38,22 @@ export default function ChatBox({ onLeaveCreated }) {
         .map(m => ({ role: m.role, content: m.content }));
       const res = await agentApi.chat(auth.token, text, history);
 
-      // Leave draft
+      // Detect any draft from the tool results
       const leaveDraft = res.tool_results?.find(t => t.name === 'draftLeaveRequest');
       if (leaveDraft?.result?.kind === 'draft') {
         setDraft(leaveDraft.result);
       }
-
-      // Profile draft
       const profileDraft = res.tool_results?.find(t => t.name === 'draftProfileUpdate');
       if (profileDraft?.result?.kind === 'profile_draft') {
         setDraft({ ...profileDraft.result, kind: 'profile_draft' });
       }
-
-      // Document draft
       const docDraft = res.tool_results?.find(t => t.name === 'draftDocumentRequest');
       if (docDraft?.result?.kind === 'document_draft') {
         setDraft({ ...docDraft.result, kind: 'document_draft' });
+      }
+      const ticketDraft = res.tool_results?.find(t => t.name === 'draftTicket');
+      if (ticketDraft?.result?.kind === 'ticket_draft') {
+        setDraft({ ...ticketDraft.result, kind: 'ticket_draft' });
       }
 
       setMessages(m => [...m, { role: 'assistant', content: res.reply || '(no reply)' }]);
@@ -83,8 +84,19 @@ export default function ChatBox({ onLeaveCreated }) {
           role: 'assistant',
           content: `📄 Submitted your ${draft.doc_type_label} request (#${r.id}). HR will review it shortly.`,
         }]);
+      } else if (draft.kind === 'ticket_draft') {
+        const r = await ticketApi.create(auth.token, {
+          category: draft.category,
+          subject: draft.subject,
+          body: draft.body,
+          ai_drafted: true,
+        });
+        setMessages(m => [...m, {
+          role: 'assistant',
+          content: `🎫 Opened ticket #${r.id}. HR will respond shortly.`,
+        }]);
       } else {
-        // Leave draft (default)
+        // Default: leave request
         const r = await leaveApi.create(auth.token, {
           leave_type: draft.leave_type,
           start_date: draft.start_date,
@@ -94,7 +106,7 @@ export default function ChatBox({ onLeaveCreated }) {
         });
         setMessages(m => [...m, {
           role: 'assistant',
-          content: `✅ Submitted request #${r.id} (${r.days} day${r.days > 1 ? 's' : ''}). It's now pending HR approval.`,
+          content: `✅ Submitted leave request #${r.id} (${r.days} day${r.days > 1 ? 's' : ''}). It's now pending HR approval.`,
         }]);
       }
       setDraft(null);
@@ -140,6 +152,36 @@ export default function ChatBox({ onLeaveCreated }) {
                 </div>
               </div>
             ))}
+
+            {/* ============ TICKET DRAFT CARD ============ */}
+            {draft && draft.kind === 'ticket_draft' && (
+              <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-3 my-2">
+                <p className="text-xs uppercase tracking-wider text-rose-700 font-semibold">
+                  🎫 Ticket — awaiting your confirmation
+                </p>
+                <div className="mt-2 text-sm space-y-1 text-slate-700">
+                  <p><strong>Category:</strong> {draft.category}</p>
+                  <p><strong>Subject:</strong> {draft.subject}</p>
+                  <p className="text-slate-600 italic">"{draft.body}"</p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    disabled={busy}
+                    onClick={confirmDraft}
+                    className="bg-emerald-600 text-white text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    ✅ Open Ticket
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={cancelDraft}
+                    className="bg-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-slate-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* ============ DOCUMENT DRAFT CARD ============ */}
             {draft && draft.kind === 'document_draft' && (
@@ -206,11 +248,11 @@ export default function ChatBox({ onLeaveCreated }) {
               </div>
             )}
 
-            {/* ============ LEAVE DRAFT CARD ============ */}
-            {draft && draft.kind !== 'profile_draft' && draft.kind !== 'document_draft' && (
+            {/* ============ LEAVE DRAFT CARD (default) ============ */}
+            {draft && !['profile_draft', 'document_draft', 'ticket_draft'].includes(draft.kind) && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 my-2">
                 <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">
-                  📋 Draft — awaiting your confirmation
+                  📋 Leave draft — awaiting your confirmation
                 </p>
                 <div className="mt-2 text-sm space-y-1 text-slate-700">
                   <p><strong>Type:</strong> {draft.leave_type}</p>
@@ -262,7 +304,7 @@ export default function ChatBox({ onLeaveCreated }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="Ask about leave, profile, or letters…"
+              placeholder="Ask about leave, profile, letters, or tickets…"
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               disabled={busy}
             />

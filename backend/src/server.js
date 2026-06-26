@@ -9,6 +9,7 @@ import notificationRoutes from './routes/notifications.js';     // ← THIS
 import { authJwt } from './middleware/authJwt.js';
 import profileRoutes from './routes/profile.js'; 
 import documentRoutes from './routes/documents.js';
+import ticketRoutes from './routes/tickets.js';
 
 const app = express();
 
@@ -42,7 +43,8 @@ app.use('/leave', leaveRoutes);
 app.use('/agent', agentRoutes);
 app.use('/notifications', notificationRoutes);  
 app.use('/profile', profileRoutes);           
-app.use('/documents', documentRoutes);            // ← AND THIS
+app.use('/documents', documentRoutes);      
+app.use('/tickets', ticketRoutes);         // ← AND THIS
 
 app.get('/me', authJwt, (req, res) => {
   res.json({ user: req.user });

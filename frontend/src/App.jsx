@@ -6,6 +6,9 @@ import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import AdminQueue from './pages/AdminQueue';
 import Documents from './pages/Documents';
+import Tickets from './pages/Tickets';
+import TicketDetail from './pages/TicketDetail';
+
 
 function Protected({ children, role }) {
   const { auth } = useAuth();
@@ -26,6 +29,9 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
           <Route path="/documents" element={<Protected><Documents /></Protected>} />
+          <Route path="/tickets" element={<Protected><Tickets /></Protected>} />
+          <Route path="/tickets/:id" element={<Protected><TicketDetail /></Protected>} />
+
         </Routes>
       </BrowserRouter>
     </AuthProvider>

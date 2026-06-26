@@ -28,8 +28,8 @@ export const tools = [
       source: 'XYZCorp HR Policy 2026',
       types: [
         { code: 'ANNUAL', name: 'Annual Leave', quota_days: 20 },
-        { code: 'SICK',   name: 'Sick Leave',   quota_days: 10 },
-        { code: 'CASUAL', name: 'Casual Leave', quota_days:  5 },
+        { code: 'SICK', name: 'Sick Leave', quota_days: 10 },
+        { code: 'CASUAL', name: 'Casual Leave', quota_days: 5 },
       ],
       approval_flow: 'Submit → Reporting Manager approval → HR escalation if delayed',
       notes: 'Weekends excluded from leave-day count. Unused leave does not carry over.',
@@ -62,11 +62,11 @@ export const tools = [
   },
 
   {
-  name: 'getMyProfile',
-  description: "Get the current user's profile: name, contact info, address, emergency contact, work info.",
-  parameters: { type: 'object', properties: {}, required: [] },
-  execute: async (_args, ctx) => {
-    const profile = await db.prepare(`
+    name: 'getMyProfile',
+    description: "Get the current user's profile: name, contact info, address, emergency contact, work info.",
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async (_args, ctx) => {
+      const profile = await db.prepare(`
       SELECT e.full_name, e.joined_on, u.email AS account_email, u.role,
              wp.phone, wp.email, wp.address_line1, wp.city, wp.state, wp.postal_code, wp.country,
              wp.emergency_contact_name, wp.emergency_contact_phone, wp.emergency_contact_relation,
@@ -76,120 +76,208 @@ export const tools = [
       LEFT JOIN worker_profiles wp ON wp.employee_id = e.id
       WHERE e.id = ?
     `).get(ctx.user.eid);
-    return profile ?? { error: 'No profile found' };
+      return profile ?? { error: 'No profile found' };
+    },
   },
-},
 
-{
-  name: 'listMyDocuments',
-  description: "List the user's document/letter requests.",
-  parameters: { type: 'object', properties: {}, required: [] },
-  execute: async (_args, ctx) => {
-    const rows = await db.prepare(`
+  {
+    name: 'listMyDocuments',
+    description: "List the user's document/letter requests.",
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async (_args, ctx) => {
+      const rows = await db.prepare(`
       SELECT id, doc_type, purpose, status, ai_drafted, created_at
       FROM document_requests
       WHERE employee_id = ?
       ORDER BY created_at DESC
       LIMIT 20
     `).all(ctx.user.eid);
-    return { count: rows.length, requests: rows };
-  },
-},
-
-{
-  name: 'draftDocumentRequest',
-  description: "Draft a request for an HR letter (employment, salary, experience, address proof, NOC). Returns a draft for user to confirm. Does NOT submit.",
-  parameters: {
-    type: 'object',
-    properties: {
-      doc_type: {
-        type: 'string',
-        enum: ['EMPLOYMENT_LETTER', 'SALARY_CERTIFICATE', 'EXPERIENCE_LETTER', 'ADDRESS_PROOF', 'NOC'],
-        description: 'Which letter type the user needs',
-      },
-      purpose: {
-        type: 'string',
-        description: 'Why the user needs the letter (e.g., "visa application", "bank loan", "rental agreement")',
-      },
+      return { count: rows.length, requests: rows };
     },
-    required: ['doc_type', 'purpose'],
   },
-  execute: async (args, _ctx) => {
-    const labels = {
-      EMPLOYMENT_LETTER: 'Employment Letter',
-      SALARY_CERTIFICATE: 'Salary Certificate',
-      EXPERIENCE_LETTER: 'Experience Letter',
-      ADDRESS_PROOF: 'Address Proof Letter',
-      NOC: 'No Objection Certificate',
-    };
-    return {
-      kind: 'document_draft',
-      doc_type: args.doc_type,
-      doc_type_label: labels[args.doc_type],
-      purpose: args.purpose,
-      requires_confirmation: true,
-    };
-  },
-},
 
-{
-  name: 'getDocumentStatus',
-  description: "Check the status of a specific document request by id, or summarize all recent requests.",
-  parameters: {
-    type: 'object',
-    properties: {
-      id: { type: 'number', description: 'Specific document request id (optional)' },
+  {
+    name: 'draftDocumentRequest',
+    description: "Draft a request for an HR letter (employment, salary, experience, address proof, NOC). Returns a draft for user to confirm. Does NOT submit.",
+    parameters: {
+      type: 'object',
+      properties: {
+        doc_type: {
+          type: 'string',
+          enum: ['EMPLOYMENT_LETTER', 'SALARY_CERTIFICATE', 'EXPERIENCE_LETTER', 'ADDRESS_PROOF', 'NOC'],
+          description: 'Which letter type the user needs',
+        },
+        purpose: {
+          type: 'string',
+          description: 'Why the user needs the letter (e.g., "visa application", "bank loan", "rental agreement")',
+        },
+      },
+      required: ['doc_type', 'purpose'],
     },
-    required: [],
+    execute: async (args, _ctx) => {
+      const labels = {
+        EMPLOYMENT_LETTER: 'Employment Letter',
+        SALARY_CERTIFICATE: 'Salary Certificate',
+        EXPERIENCE_LETTER: 'Experience Letter',
+        ADDRESS_PROOF: 'Address Proof Letter',
+        NOC: 'No Objection Certificate',
+      };
+      return {
+        kind: 'document_draft',
+        doc_type: args.doc_type,
+        doc_type_label: labels[args.doc_type],
+        purpose: args.purpose,
+        requires_confirmation: true,
+      };
+    },
   },
-  execute: async (args, ctx) => {
-    if (args?.id) {
-      const row = await db.prepare(`
+
+  {
+    name: 'getDocumentStatus',
+    description: "Check the status of a specific document request by id, or summarize all recent requests.",
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Specific document request id (optional)' },
+      },
+      required: [],
+    },
+    execute: async (args, ctx) => {
+      if (args?.id) {
+        const row = await db.prepare(`
         SELECT id, doc_type, purpose, status, decided_at, created_at
         FROM document_requests
         WHERE id = ? AND employee_id = ?
       `).get(args.id, ctx.user.eid);
-      return row ?? { error: 'Not found' };
-    }
-    const rows = await db.prepare(`
+        return row ?? { error: 'Not found' };
+      }
+      const rows = await db.prepare(`
       SELECT id, doc_type, status, created_at
       FROM document_requests
       WHERE employee_id = ?
       ORDER BY created_at DESC LIMIT 10
     `).all(ctx.user.eid);
-    return { count: rows.length, requests: rows };
-  },
-},
-
-{
-  name: 'draftProfileUpdate',
-  description: "Draft an update to a single profile field. Returns a draft for the user to confirm. Does NOT save anything.",
-  parameters: {
-    type: 'object',
-    properties: {
-      field: {
-        type: 'string',
-        enum: ['phone', 'email', 'address_line1', 'city', 'state', 'postal_code',
-               'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'blood_group'],
-        description: 'Which profile field to update',
-      },
-      value: { type: 'string', description: 'New value' },
+      return { count: rows.length, requests: rows };
     },
-    required: ['field', 'value'],
   },
-  execute: async (args, ctx) => {
-    const old = await db.prepare(
-      `SELECT ${args.field} AS v FROM worker_profiles WHERE employee_id = ?`
-    ).get(ctx.user.eid);
-    return {
-      kind: 'profile_draft',
-      field: args.field,
-      old_value: old?.v ?? null,
-      new_value: args.value,
+  {
+    name: 'listMyTickets',
+    description: "List the user's HR/IT tickets.",
+    parameters: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['open', 'in_progress', 'resolved', 'closed', 'all'] },
+      },
+      required: [],
+    },
+    execute: async (args, ctx) => {
+      const status = args?.status ?? 'all';
+      const base = `
+      SELECT id, category, subject, status, last_activity_at, created_at
+      FROM tickets WHERE employee_id = ?`;
+      const rows = status === 'all'
+        ? await db.prepare(base + ' ORDER BY last_activity_at DESC LIMIT 20').all(ctx.user.eid)
+        : await db.prepare(base + ' AND status = ? ORDER BY last_activity_at DESC LIMIT 20').all(ctx.user.eid, status);
+      return { count: rows.length, tickets: rows };
+    },
+  },
+
+  {
+    name: 'draftTicket',
+    description: "Draft a new HR/IT support ticket for the user to review. Categorize their concern correctly. Does NOT submit until user confirms.",
+    parameters: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          enum: ['PAYROLL', 'IT', 'BENEFITS', 'POLICY', 'GENERAL'],
+          description: 'Best-matching category for the concern',
+        },
+        subject: { type: 'string', description: 'Short title for the ticket' },
+        body: { type: 'string', description: 'Detailed description of the issue' },
+      },
+      required: ['category', 'subject', 'body'],
+    },
+    execute: async (args) => ({
+      kind: 'ticket_draft',
+      category: args.category,
+      subject: args.subject,
+      body: args.body,
       requires_confirmation: true,
-    };
+    }),
   },
-},
+
+  {
+    name: 'getTicketDetails',
+    description: "Fetch a specific ticket's details and conversation thread by id.",
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Ticket id' },
+      },
+      required: ['id'],
+    },
+    execute: async (args, ctx) => {
+      const ticket = await db.prepare(`
+      SELECT id, category, subject, status, created_at
+      FROM tickets WHERE id = ? AND employee_id = ?
+    `).get(args.id, ctx.user.eid);
+      if (!ticket) return { error: 'Ticket not found' };
+      const messages = await db.prepare(`
+      SELECT author_role, body, created_at
+      FROM ticket_messages WHERE ticket_id = ? ORDER BY created_at ASC
+    `).all(args.id);
+      return { ticket, messages };
+    },
+  },
+
+  {
+    name: 'getTicketsAwaitingMyReply',
+    description: "Find tickets where HR has replied but the user hasn't responded yet. Useful for proactive nudges.",
+    parameters: { type: 'object', properties: {}, required: [] },
+    execute: async (_args, ctx) => {
+      const rows = await db.prepare(`
+      SELECT t.id, t.category, t.subject, t.last_activity_at,
+             (SELECT author_role FROM ticket_messages WHERE ticket_id = t.id
+              ORDER BY created_at DESC LIMIT 1) AS last_author
+      FROM tickets t
+      WHERE t.employee_id = ?
+        AND t.status IN ('open', 'in_progress')
+    `).all(ctx.user.eid);
+      const awaiting = rows.filter(r => r.last_author === 'admin');
+      return { count: awaiting.length, tickets: awaiting };
+    },
+  },
+
+  {
+    name: 'draftProfileUpdate',
+    description: "Draft an update to a single profile field. Returns a draft for the user to confirm. Does NOT save anything.",
+    parameters: {
+      type: 'object',
+      properties: {
+        field: {
+          type: 'string',
+          enum: ['phone', 'email', 'address_line1', 'city', 'state', 'postal_code',
+            'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'blood_group'],
+          description: 'Which profile field to update',
+        },
+        value: { type: 'string', description: 'New value' },
+      },
+      required: ['field', 'value'],
+    },
+    execute: async (args, ctx) => {
+      const old = await db.prepare(
+        `SELECT ${args.field} AS v FROM worker_profiles WHERE employee_id = ?`
+      ).get(ctx.user.eid);
+      return {
+        kind: 'profile_draft',
+        field: args.field,
+        old_value: old?.v ?? null,
+        new_value: args.value,
+        requires_confirmation: true,
+      };
+    },
+  },
 
   {
     name: 'draftLeaveRequest',
@@ -200,14 +288,14 @@ export const tools = [
       properties: {
         leave_type: { type: 'string', enum: ['ANNUAL', 'SICK', 'CASUAL'] },
         start_date: { type: 'string', description: 'YYYY-MM-DD' },
-        end_date:   { type: 'string', description: 'YYYY-MM-DD' },
-        reason:     { type: 'string', description: 'Brief reason' },
+        end_date: { type: 'string', description: 'YYYY-MM-DD' },
+        reason: { type: 'string', description: 'Brief reason' },
       },
       required: ['leave_type', 'start_date', 'end_date'],
     },
     execute: async (args, ctx) => {
       const start = new Date(args.start_date + 'T00:00:00Z');
-      const end   = new Date(args.end_date   + 'T00:00:00Z');
+      const end = new Date(args.end_date + 'T00:00:00Z');
       let days = 0;
       for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const dow = d.getUTCDay();

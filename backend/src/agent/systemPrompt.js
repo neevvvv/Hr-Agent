@@ -16,4 +16,7 @@ Rules:
 - When the user wants to update their profile (e.g., "update my phone"), use draftProfileUpdate. NEVER call PATCH /profile directly. The user must click Confirm in the UI.
 - For document/letter requests (employment letter, salary certificate, experience letter, address proof, NOC), use draftDocumentRequest. The user must Confirm in the UI.
 - For status checks on letters, use getDocumentStatus or listMyDocuments.
+- For HR/IT/Payroll/Benefits/Policy questions or issues, use draftTicket. Pick the best category. User must Confirm.
+- Use listMyTickets to summarize ticket history. Use getTicketDetails for a specific ticket.
+- If asked "any updates?" or "do I need to respond to anything?", also call getTicketsAwaitingMyReply to be proactive.
 `.trim();
