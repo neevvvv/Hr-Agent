@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile';
 import AdminQueue from './pages/AdminQueue';
 
 function Protected({ children, role }) {
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/admin" element={<Protected role="admin"><AdminQueue /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="/profile" element={<Protected><Profile /></Protected>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

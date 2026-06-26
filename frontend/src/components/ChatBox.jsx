@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { agentApi } from '../api/agent';
 import { leaveApi } from '../api/leave';
+import { profileApi } from '../api/profile';
 
 export default function ChatBox({ onLeaveCreated }) {
   const { auth } = useAuth();
@@ -10,7 +11,7 @@ export default function ChatBox({ onLeaveCreated }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Hi! I can check your leave balance, look up the policy, list your requests, or draft a leave request. What do you need?",
+      content: "Hi! I can check your leave balance, look up policy, list your requests, draft a leave request, view your profile, or help update profile fields. What do you need?",
     },
   ]);
   const [busy, setBusy] = useState(false);
@@ -34,10 +35,18 @@ export default function ChatBox({ onLeaveCreated }) {
         .map(m => ({ role: m.role, content: m.content }));
       const res = await agentApi.chat(auth.token, text, history);
 
-      const draftResult = res.tool_results?.find(t => t.name === 'draftLeaveRequest');
-      if (draftResult?.result?.kind === 'draft') {
-        setDraft(draftResult.result);
+      // Leave draft
+      const leaveDraft = res.tool_results?.find(t => t.name === 'draftLeaveRequest');
+      if (leaveDraft?.result?.kind === 'draft') {
+        setDraft(leaveDraft.result);
       }
+
+      // Profile draft
+      const profileDraft = res.tool_results?.find(t => t.name === 'draftProfileUpdate');
+      if (profileDraft?.result?.kind === 'profile_draft') {
+        setDraft({ ...profileDraft.result, kind: 'profile_draft' });
+      }
+
       setMessages(m => [...m, { role: 'assistant', content: res.reply || '(no reply)' }]);
     } catch (e) {
       setMessages(m => [...m, { role: 'assistant', content: `❌ ${e.message}` }]);
@@ -50,21 +59,29 @@ export default function ChatBox({ onLeaveCreated }) {
     if (!draft) return;
     setBusy(true);
     try {
-      const r = await leaveApi.create(auth.token, {
-        leave_type: draft.leave_type,
-        start_date: draft.start_date,
-        end_date: draft.end_date,
-        reason: draft.reason,
-        ai_drafted: true,
-      });
-      setMessages(m => [...m, {
-        role: 'assistant',
-        content: `✅ Submitted request #${r.id} (${r.days} day${r.days > 1 ? 's' : ''}). It's now pending HR approval.`,
-      }]);
+      if (draft.kind === 'profile_draft') {
+        await profileApi.update(auth.token, draft.field, draft.new_value, true);
+        setMessages(m => [...m, {
+          role: 'assistant',
+          content: `✅ Updated ${draft.field.replace(/_/g, ' ')}. The change is saved.`,
+        }]);
+      } else {
+        const r = await leaveApi.create(auth.token, {
+          leave_type: draft.leave_type,
+          start_date: draft.start_date,
+          end_date: draft.end_date,
+          reason: draft.reason,
+          ai_drafted: true,
+        });
+        setMessages(m => [...m, {
+          role: 'assistant',
+          content: `✅ Submitted request #${r.id} (${r.days} day${r.days > 1 ? 's' : ''}). It's now pending HR approval.`,
+        }]);
+      }
       setDraft(null);
       onLeaveCreated?.();
     } catch (e) {
-      setMessages(m => [...m, { role: 'assistant', content: `❌ Couldn't submit: ${e.message}` }]);
+      setMessages(m => [...m, { role: 'assistant', content: `❌ Couldn't save: ${e.message}` }]);
     } finally {
       setBusy(false);
     }
@@ -105,8 +122,44 @@ export default function ChatBox({ onLeaveCreated }) {
               </div>
             ))}
 
-            {/* Draft confirmation card */}
-            {draft && (
+            {/* ============ PROFILE DRAFT CARD ============ */}
+            {draft && draft.kind === 'profile_draft' && (
+              <div className="bg-indigo-50 border-2 border-indigo-300 rounded-xl p-3 my-2">
+                <p className="text-xs uppercase tracking-wider text-indigo-700 font-semibold">
+                  ✏️ Profile update — awaiting your confirmation
+                </p>
+                <div className="mt-2 text-sm space-y-1 text-slate-700">
+                  <p><strong>Field:</strong> {draft.field.replace(/_/g, ' ')}</p>
+                  <p>
+                    <strong>Old:</strong>{' '}
+                    <span className="text-slate-500">{draft.old_value || '∅'}</span>
+                  </p>
+                  <p>
+                    <strong>New:</strong>{' '}
+                    <span className="text-indigo-700 font-semibold">{draft.new_value}</span>
+                  </p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    disabled={busy}
+                    onClick={confirmDraft}
+                    className="bg-emerald-600 text-white text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    ✅ Confirm
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={cancelDraft}
+                    className="bg-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-slate-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ============ LEAVE DRAFT CARD ============ */}
+            {draft && draft.kind !== 'profile_draft' && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 my-2">
                 <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">
                   📋 Draft — awaiting your confirmation
@@ -114,7 +167,9 @@ export default function ChatBox({ onLeaveCreated }) {
                 <div className="mt-2 text-sm space-y-1 text-slate-700">
                   <p><strong>Type:</strong> {draft.leave_type}</p>
                   <p><strong>Dates:</strong> {draft.start_date} → {draft.end_date}</p>
-                  <p><strong>Days:</strong> {draft.days} business day{draft.days > 1 ? 's' : ''}</p>
+                  <p>
+                    <strong>Days:</strong> {draft.days} business day{draft.days > 1 ? 's' : ''}
+                  </p>
                   {draft.reason && <p><strong>Reason:</strong> {draft.reason}</p>}
                   <p className="text-xs text-slate-500">
                     Current {draft.leave_type.toLowerCase()} balance: {draft.remaining_balance} days
@@ -159,7 +214,7 @@ export default function ChatBox({ onLeaveCreated }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="Ask about leave…"
+              placeholder="Ask about leave or profile…"
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               disabled={busy}
             />

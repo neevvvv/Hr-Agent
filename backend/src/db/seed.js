@@ -65,7 +65,32 @@ async function seed() {
       );
     }
   }
+  // Seed default profile rows so every employee has SOMETHING to view
+  const defaultProfiles = [
+    { eid: 1, phone: '+91-9876500001', email: 'priya.hr@xyzcorp.com', address_line1: '12 MG Road', city: 'Bengaluru', state: 'KA', postal_code: '560001', emergency_contact_name: 'Anil Sharma', emergency_contact_phone: '+91-9876500099', emergency_contact_relation: 'Spouse', date_of_birth: '1985-04-12', blood_group: 'O+', job_title: 'HR Manager', department: 'Human Resources' },
+    { eid: 2, phone: '+91-9876500002', email: 'rahul@xyzcorp.com', address_line1: '45 Indiranagar', city: 'Bengaluru', state: 'KA', postal_code: '560038', emergency_contact_name: 'Sunita Verma', emergency_contact_phone: '+91-9876500098', emergency_contact_relation: 'Mother', date_of_birth: '1995-08-22', blood_group: 'A+', job_title: 'Software Engineer', department: 'Engineering' },
+    { eid: 3, phone: '+91-9876500003', email: 'anita@xyzcorp.com', address_line1: '78 Koramangala', city: 'Bengaluru', state: 'KA', postal_code: '560034', emergency_contact_name: 'Ravi Iyer', emergency_contact_phone: '+91-9876500097', emergency_contact_relation: 'Father', date_of_birth: '1993-11-05', blood_group: 'B+', job_title: 'Product Designer', department: 'Design' },
+    { eid: 4, phone: '+91-9876500004', email: 'vikram@xyzcorp.com', address_line1: '23 HSR Layout', city: 'Bengaluru', state: 'KA', postal_code: '560102', emergency_contact_name: 'Pooja Singh', emergency_contact_phone: '+91-9876500096', emergency_contact_relation: 'Sister', date_of_birth: '1990-02-18', blood_group: 'AB+', job_title: 'Data Analyst', department: 'Analytics' },
+    { eid: 5, phone: '+91-9876500005', email: 'meera@xyzcorp.com', address_line1: '56 Whitefield', city: 'Bengaluru', state: 'KA', postal_code: '560066', emergency_contact_name: 'Kiran Patel', emergency_contact_phone: '+91-9876500095', emergency_contact_relation: 'Spouse', date_of_birth: '1997-06-30', blood_group: 'O-', job_title: 'Software Engineer', department: 'Engineering' },
+    { eid: 6, phone: '+91-9876500006', email: 'arjun@xyzcorp.com', address_line1: '34 Jayanagar', city: 'Bengaluru', state: 'KA', postal_code: '560011', emergency_contact_name: 'Neha Kapoor', emergency_contact_phone: '+91-9876500094', emergency_contact_relation: 'Spouse', date_of_birth: '1992-09-14', blood_group: 'A-', job_title: 'Marketing Specialist', department: 'Marketing' },
+  ];
 
+  for (const p of defaultProfiles) {
+    await db.query(`
+      INSERT INTO worker_profiles (
+        employee_id, phone, email, address_line1, city, state, postal_code,
+        emergency_contact_name, emergency_contact_phone, emergency_contact_relation,
+        date_of_birth, blood_group, job_title, department
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      ON CONFLICT (employee_id) DO NOTHING
+    `, [
+      p.eid, p.phone, p.email, p.address_line1, p.city, p.state, p.postal_code,
+      p.emergency_contact_name, p.emergency_contact_phone, p.emergency_contact_relation,
+      p.date_of_birth, p.blood_group, p.job_title, p.department,
+    ]);
+  }
+  console.log(`✅ Profile data seeded for ${defaultProfiles.length} employees.`);
   console.log(`✅ Seed complete. ${people.length} users, ${employees.length * types.length} balances.`);
   console.log(`   Login: rahul@xyzcorp.com / ${demoPassword} (employee)`);
   console.log(`   Login: priya.hr@xyzcorp.com / ${demoPassword} (admin)`);

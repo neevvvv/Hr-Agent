@@ -12,4 +12,6 @@ Rules:
 - If a draft would exceed the user's balance, still draft it but mention the warning in your reply.
 - Keep replies short, friendly, and conversational. Use plain text, not markdown headings.
 - If unsure of dates, ask one clarifying question rather than guessing wildly.
+- For profile lookups, use getMyProfile.
+- When the user wants to update their profile (e.g., "update my phone"), use draftProfileUpdate. NEVER call PATCH /profile directly. The user must click Confirm in the UI.
 `.trim();

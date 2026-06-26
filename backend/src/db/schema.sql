@@ -57,3 +57,41 @@ CREATE TABLE IF NOT EXISTS notifications (
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id, read_at, created_at DESC);
+
+-- Worker profile (1-to-1 with employees)
+CREATE TABLE IF NOT EXISTS worker_profiles (
+  employee_id INTEGER PRIMARY KEY REFERENCES employees(id),
+  phone TEXT,
+  email TEXT,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT DEFAULT 'India',
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  emergency_contact_relation TEXT,
+  date_of_birth DATE,
+  blood_group TEXT,
+  job_title TEXT,
+  department TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit log — every state-changing event
+CREATE TABLE IF NOT EXISTS audit_log (
+  id SERIAL PRIMARY KEY,
+  actor_user_id INTEGER REFERENCES users(id),
+  entity_type TEXT NOT NULL,           -- 'profile', 'leave_request', etc.
+  entity_id INTEGER NOT NULL,
+  action TEXT NOT NULL,                -- 'update', 'create', 'approve', etc.
+  field TEXT,                          -- which field changed (for updates)
+  old_value TEXT,
+  new_value TEXT,
+  ai_assisted BOOLEAN DEFAULT FALSE,   -- was AI involved in this change?
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_user_id, created_at DESC);

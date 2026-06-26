@@ -7,6 +7,7 @@ import leaveRoutes from './routes/leave.js';
 import agentRoutes from './routes/agent.js';
 import notificationRoutes from './routes/notifications.js';     // ← THIS
 import { authJwt } from './middleware/authJwt.js';
+import profileRoutes from './routes/profile.js'; 
 
 const app = express();
 
@@ -38,7 +39,8 @@ app.get('/health', async (_req, res) => {
 app.use('/auth', authRoutes);
 app.use('/leave', leaveRoutes);
 app.use('/agent', agentRoutes);
-app.use('/notifications', notificationRoutes);                   // ← AND THIS
+app.use('/notifications', notificationRoutes);  
+app.use('/profile', profileRoutes);                     // ← AND THIS
 
 app.get('/me', authJwt, (req, res) => {
   res.json({ user: req.user });

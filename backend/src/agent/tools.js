@@ -62,6 +62,55 @@ export const tools = [
   },
 
   {
+  name: 'getMyProfile',
+  description: "Get the current user's profile: name, contact info, address, emergency contact, work info.",
+  parameters: { type: 'object', properties: {}, required: [] },
+  execute: async (_args, ctx) => {
+    const profile = await db.prepare(`
+      SELECT e.full_name, e.joined_on, u.email AS account_email, u.role,
+             wp.phone, wp.email, wp.address_line1, wp.city, wp.state, wp.postal_code, wp.country,
+             wp.emergency_contact_name, wp.emergency_contact_phone, wp.emergency_contact_relation,
+             wp.date_of_birth, wp.blood_group, wp.job_title, wp.department
+      FROM employees e
+      JOIN users u ON u.id = e.user_id
+      LEFT JOIN worker_profiles wp ON wp.employee_id = e.id
+      WHERE e.id = ?
+    `).get(ctx.user.eid);
+    return profile ?? { error: 'No profile found' };
+  },
+},
+
+{
+  name: 'draftProfileUpdate',
+  description: "Draft an update to a single profile field. Returns a draft for the user to confirm. Does NOT save anything.",
+  parameters: {
+    type: 'object',
+    properties: {
+      field: {
+        type: 'string',
+        enum: ['phone', 'email', 'address_line1', 'city', 'state', 'postal_code',
+               'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relation', 'blood_group'],
+        description: 'Which profile field to update',
+      },
+      value: { type: 'string', description: 'New value' },
+    },
+    required: ['field', 'value'],
+  },
+  execute: async (args, ctx) => {
+    const old = await db.prepare(
+      `SELECT ${args.field} AS v FROM worker_profiles WHERE employee_id = ?`
+    ).get(ctx.user.eid);
+    return {
+      kind: 'profile_draft',
+      field: args.field,
+      old_value: old?.v ?? null,
+      new_value: args.value,
+      requires_confirmation: true,
+    };
+  },
+},
+
+  {
     name: 'draftLeaveRequest',
     description:
       'Draft a leave request for the user to review. Does NOT save anything. The user must explicitly click Confirm before it is submitted.',
