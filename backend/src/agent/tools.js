@@ -294,21 +294,48 @@ export const tools = [
       required: ['leave_type', 'start_date', 'end_date'],
     },
     execute: async (args, ctx) => {
+      // Validate required args
+      if (!args?.leave_type || !args?.start_date || !args?.end_date) {
+        return {
+          kind: 'draft_incomplete',
+          missing: [
+            !args?.leave_type && 'leave_type',
+            !args?.start_date && 'start_date',
+            !args?.end_date && 'end_date',
+          ].filter(Boolean),
+          hint: 'Please provide leave_type (ANNUAL/SICK/CASUAL), start_date and end_date in YYYY-MM-DD format.',
+        };
+      }
+
       const start = new Date(args.start_date + 'T00:00:00Z');
       const end = new Date(args.end_date + 'T00:00:00Z');
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return { kind: 'draft_incomplete', error: 'Invalid dates' };
+      }
+
       let days = 0;
       for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         const dow = d.getUTCDay();
         if (dow !== 0 && dow !== 6) days++;
       }
       const year = start.getUTCFullYear();
+
       const t = await db.prepare('SELECT id, annual_quota FROM leave_types WHERE code = ?').get(args.leave_type);
+      if (!t) {
+        return {
+          kind: 'draft_incomplete',
+          error: `Unknown leave type: ${args.leave_type}. Valid: ANNUAL, SICK, CASUAL.`,
+        };
+      }
+
       const bal = await db.prepare(`
-        SELECT COALESCE(used_days,0) AS used FROM leave_balances
-        WHERE employee_id=? AND leave_type_id=? AND year=?
-      `).get(ctx.user.eid, t.id, year);
+    SELECT COALESCE(used_days,0) AS used FROM leave_balances
+    WHERE employee_id=? AND leave_type_id=? AND year=?
+  `).get(ctx.user.eid, t.id, year);
+
       const used = Number(bal?.used ?? 0);
       const remaining = t.annual_quota - used;
+
       return {
         kind: 'draft',
         leave_type: args.leave_type,

@@ -145,3 +145,15 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
 CREATE INDEX IF NOT EXISTS idx_tickets_employee ON tickets(employee_id, last_activity_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, last_activity_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_ticket ON ticket_messages(ticket_id, created_at);
+
+CREATE TABLE IF NOT EXISTS agent_plans (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  request TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  steps_json TEXT,
+  outcome TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_plans_user ON agent_plans(user_id, created_at DESC);

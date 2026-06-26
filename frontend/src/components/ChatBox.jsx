@@ -5,6 +5,8 @@ import { leaveApi } from '../api/leave';
 import { profileApi } from '../api/profile';
 import { documentApi } from '../api/documents';
 import { ticketApi } from '../api/tickets';
+import { streamPlan } from '../api/plan';
+import ThoughtStream from './ThoughtStream';
 
 export default function ChatBox({ onLeaveCreated }) {
   const { auth } = useAuth();
@@ -14,16 +16,39 @@ export default function ChatBox({ onLeaveCreated }) {
     {
       role: 'assistant',
       content:
-        "Hi! I can help with leave, profile updates, HR letters (employment, salary, NOC), and support tickets. What do you need?",
+        "Hi! I can help with leave, profile updates, HR letters, and support tickets. For complex requests like \"plan my time off around Diwali\", I'll show my reasoning step by step. What do you need?",
     },
   ]);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
+
+  // Streaming planner state
+  const [streamPhase, setStreamPhase] = useState(null);   // null | 'planning' | 'running' | 'done'
+  const [streamSteps, setStreamSteps] = useState([]);
+
   const scrollRef = useRef(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, draft, busy]);
+  }, [messages, draft, busy, streamSteps]);
+
+  // Decide whether to use the multi-step planner or the regular agent
+  function looksComplex(t) {
+    const lower = t.toLowerCase();
+    const triggers = [
+      'plan', 'help me', 'around', 'optimize',
+      'compare', 'check everything', 'overview',
+      'walk me through', 'updates', 'any updates',
+      'status of', 'summary', 'all my', 'everything',
+    ];
+    const longish = t.length > 80;
+    return longish || triggers.some(k => lower.includes(k));
+  }
+
+  function applyDraft(d) {
+    if (!d) return;
+    setDraft(d);
+  }
 
   async function send() {
     const text = input.trim();
@@ -31,32 +56,90 @@ export default function ChatBox({ onLeaveCreated }) {
     setInput('');
     setMessages(m => [...m, { role: 'user', content: text }]);
     setBusy(true);
+    setStreamSteps([]);
+    setStreamPhase(null);
+
+    const usePlanner = looksComplex(text);
+
     try {
-      const history = messages
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .slice(-6)
-        .map(m => ({ role: m.role, content: m.content }));
-      const res = await agentApi.chat(auth.token, text, history);
+      if (usePlanner) {
+        // ====== Streaming multi-step planner mode ======
+        setStreamPhase('planning');
+        let finalReply = '';
+        let finalDraft = null;
+        const stepsState = [];
 
-      // Detect any draft from the tool results
-      const leaveDraft = res.tool_results?.find(t => t.name === 'draftLeaveRequest');
-      if (leaveDraft?.result?.kind === 'draft') {
-        setDraft(leaveDraft.result);
-      }
-      const profileDraft = res.tool_results?.find(t => t.name === 'draftProfileUpdate');
-      if (profileDraft?.result?.kind === 'profile_draft') {
-        setDraft({ ...profileDraft.result, kind: 'profile_draft' });
-      }
-      const docDraft = res.tool_results?.find(t => t.name === 'draftDocumentRequest');
-      if (docDraft?.result?.kind === 'document_draft') {
-        setDraft({ ...docDraft.result, kind: 'document_draft' });
-      }
-      const ticketDraft = res.tool_results?.find(t => t.name === 'draftTicket');
-      if (ticketDraft?.result?.kind === 'ticket_draft') {
-        setDraft({ ...ticketDraft.result, kind: 'ticket_draft' });
-      }
+        await streamPlan({
+          token: auth.token,
+          message: text,
+          onEvent: (name, payload) => {
+            if (name === 'status') {
+              setStreamPhase(payload.phase);
+            } else if (name === 'plan') {
+              setStreamPhase('running');
+              const initial = payload.plan.map((p, i) => ({
+                index: i,
+                action: p.action,
+                reason: p.reason,
+                status: 'pending',
+              }));
+              stepsState.splice(0, stepsState.length, ...initial);
+              setStreamSteps([...stepsState]);
+            } else if (name === 'step_start') {
+              stepsState[payload.index] = {
+                ...stepsState[payload.index],
+                status: 'pending',
+              };
+              setStreamSteps([...stepsState]);
+            } else if (name === 'step_done') {
+              stepsState[payload.index] = {
+                ...stepsState[payload.index],
+                status: payload.ok ? 'ok' : 'fail',
+                summary: payload.summary,
+                error: payload.error,
+              };
+              setStreamSteps([...stepsState]);
+            } else if (name === 'done') {
+              finalReply = payload.reply || '';
+              finalDraft = payload.draft;
+            } else if (name === 'error') {
+              finalReply = `❌ ${payload.error}`;
+            }
+          },
+        });
 
-      setMessages(m => [...m, { role: 'assistant', content: res.reply || '(no reply)' }]);
+        setStreamPhase('done');
+
+        if (finalDraft) applyDraft(finalDraft);
+        setMessages(m => [...m, { role: 'assistant', content: finalReply || '(no reply)' }]);
+      } else {
+        // ====== Regular single-shot agent mode ======
+        const history = messages
+          .filter(m => m.role === 'user' || m.role === 'assistant')
+          .slice(-6)
+          .map(m => ({ role: m.role, content: m.content }));
+        const res = await agentApi.chat(auth.token, text, history);
+
+        const leaveDraft = res.tool_results?.find(t => t.name === 'draftLeaveRequest');
+        if (leaveDraft?.result?.kind === 'draft') setDraft(leaveDraft.result);
+
+        const profileDraft = res.tool_results?.find(t => t.name === 'draftProfileUpdate');
+        if (profileDraft?.result?.kind === 'profile_draft') {
+          setDraft({ ...profileDraft.result, kind: 'profile_draft' });
+        }
+
+        const docDraft = res.tool_results?.find(t => t.name === 'draftDocumentRequest');
+        if (docDraft?.result?.kind === 'document_draft') {
+          setDraft({ ...docDraft.result, kind: 'document_draft' });
+        }
+
+        const ticketDraft = res.tool_results?.find(t => t.name === 'draftTicket');
+        if (ticketDraft?.result?.kind === 'ticket_draft') {
+          setDraft({ ...ticketDraft.result, kind: 'ticket_draft' });
+        }
+
+        setMessages(m => [...m, { role: 'assistant', content: res.reply || '(no reply)' }]);
+      }
     } catch (e) {
       setMessages(m => [...m, { role: 'assistant', content: `❌ ${e.message}` }]);
     } finally {
@@ -136,10 +219,10 @@ export default function ChatBox({ onLeaveCreated }) {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-24 right-6 w-[380px] max-w-[calc(100vw-3rem)] h-[560px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border">
+        <div className="fixed bottom-24 right-6 w-[400px] max-w-[calc(100vw-3rem)] h-[600px] max-h-[calc(100vh-8rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border">
           <div className="px-4 py-3 border-b bg-violet-600 text-white rounded-t-2xl">
             <p className="font-semibold">HR Assistant</p>
-            <p className="text-xs opacity-80">Powered by Llama 3.3 · Groq</p>
+            <p className="text-xs opacity-80">Powered by Llama 3.3 · Groq · Multi-step reasoning</p>
           </div>
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -152,6 +235,11 @@ export default function ChatBox({ onLeaveCreated }) {
                 </div>
               </div>
             ))}
+
+            {/* ============ THOUGHT STREAM ============ */}
+            {(streamPhase === 'planning' || streamPhase === 'running' || streamSteps.length > 0) && (
+              <ThoughtStream phase={streamPhase} steps={streamSteps} />
+            )}
 
             {/* ============ TICKET DRAFT CARD ============ */}
             {draft && draft.kind === 'ticket_draft' && (
@@ -290,7 +378,7 @@ export default function ChatBox({ onLeaveCreated }) {
               </div>
             )}
 
-            {busy && (
+            {busy && !streamPhase && (
               <div className="flex justify-start">
                 <div className="bg-slate-100 rounded-2xl px-3 py-2 text-sm text-slate-500 animate-pulse">
                   …thinking
@@ -304,7 +392,7 @@ export default function ChatBox({ onLeaveCreated }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="Ask about leave, profile, letters, or tickets…"
+              placeholder='Try: "Plan my Diwali week off"'
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               disabled={busy}
             />
