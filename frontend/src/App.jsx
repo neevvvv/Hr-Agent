@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import AdminQueue from './pages/AdminQueue';
+import Documents from './pages/Documents';
 
 function Protected({ children, role }) {
   const { auth } = useAuth();
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/admin" element={<Protected role="admin"><AdminQueue /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
           <Route path="/profile" element={<Protected><Profile /></Protected>} />
+          <Route path="/documents" element={<Protected><Documents /></Protected>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

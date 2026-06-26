@@ -95,3 +95,26 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS document_requests (
+  id SERIAL PRIMARY KEY,
+  employee_id INTEGER NOT NULL REFERENCES employees(id),
+  doc_type TEXT NOT NULL CHECK (doc_type IN (
+    'EMPLOYMENT_LETTER',
+    'SALARY_CERTIFICATE',
+    'EXPERIENCE_LETTER',
+    'ADDRESS_PROOF',
+    'NOC'
+  )),
+  purpose TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+  generated_content TEXT,         -- letter body after approval
+  decided_by INTEGER REFERENCES users(id),
+  decided_at TIMESTAMPTZ,
+  ai_drafted BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_docs_employee ON document_requests(employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_docs_status ON document_requests(status, created_at DESC);

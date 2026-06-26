@@ -81,6 +81,87 @@ export const tools = [
 },
 
 {
+  name: 'listMyDocuments',
+  description: "List the user's document/letter requests.",
+  parameters: { type: 'object', properties: {}, required: [] },
+  execute: async (_args, ctx) => {
+    const rows = await db.prepare(`
+      SELECT id, doc_type, purpose, status, ai_drafted, created_at
+      FROM document_requests
+      WHERE employee_id = ?
+      ORDER BY created_at DESC
+      LIMIT 20
+    `).all(ctx.user.eid);
+    return { count: rows.length, requests: rows };
+  },
+},
+
+{
+  name: 'draftDocumentRequest',
+  description: "Draft a request for an HR letter (employment, salary, experience, address proof, NOC). Returns a draft for user to confirm. Does NOT submit.",
+  parameters: {
+    type: 'object',
+    properties: {
+      doc_type: {
+        type: 'string',
+        enum: ['EMPLOYMENT_LETTER', 'SALARY_CERTIFICATE', 'EXPERIENCE_LETTER', 'ADDRESS_PROOF', 'NOC'],
+        description: 'Which letter type the user needs',
+      },
+      purpose: {
+        type: 'string',
+        description: 'Why the user needs the letter (e.g., "visa application", "bank loan", "rental agreement")',
+      },
+    },
+    required: ['doc_type', 'purpose'],
+  },
+  execute: async (args, _ctx) => {
+    const labels = {
+      EMPLOYMENT_LETTER: 'Employment Letter',
+      SALARY_CERTIFICATE: 'Salary Certificate',
+      EXPERIENCE_LETTER: 'Experience Letter',
+      ADDRESS_PROOF: 'Address Proof Letter',
+      NOC: 'No Objection Certificate',
+    };
+    return {
+      kind: 'document_draft',
+      doc_type: args.doc_type,
+      doc_type_label: labels[args.doc_type],
+      purpose: args.purpose,
+      requires_confirmation: true,
+    };
+  },
+},
+
+{
+  name: 'getDocumentStatus',
+  description: "Check the status of a specific document request by id, or summarize all recent requests.",
+  parameters: {
+    type: 'object',
+    properties: {
+      id: { type: 'number', description: 'Specific document request id (optional)' },
+    },
+    required: [],
+  },
+  execute: async (args, ctx) => {
+    if (args?.id) {
+      const row = await db.prepare(`
+        SELECT id, doc_type, purpose, status, decided_at, created_at
+        FROM document_requests
+        WHERE id = ? AND employee_id = ?
+      `).get(args.id, ctx.user.eid);
+      return row ?? { error: 'Not found' };
+    }
+    const rows = await db.prepare(`
+      SELECT id, doc_type, status, created_at
+      FROM document_requests
+      WHERE employee_id = ?
+      ORDER BY created_at DESC LIMIT 10
+    `).all(ctx.user.eid);
+    return { count: rows.length, requests: rows };
+  },
+},
+
+{
   name: 'draftProfileUpdate',
   description: "Draft an update to a single profile field. Returns a draft for the user to confirm. Does NOT save anything.",
   parameters: {

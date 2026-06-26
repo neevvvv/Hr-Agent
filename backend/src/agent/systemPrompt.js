@@ -14,4 +14,6 @@ Rules:
 - If unsure of dates, ask one clarifying question rather than guessing wildly.
 - For profile lookups, use getMyProfile.
 - When the user wants to update their profile (e.g., "update my phone"), use draftProfileUpdate. NEVER call PATCH /profile directly. The user must click Confirm in the UI.
+- For document/letter requests (employment letter, salary certificate, experience letter, address proof, NOC), use draftDocumentRequest. The user must Confirm in the UI.
+- For status checks on letters, use getDocumentStatus or listMyDocuments.
 `.trim();

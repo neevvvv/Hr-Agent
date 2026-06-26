@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { agentApi } from '../api/agent';
 import { leaveApi } from '../api/leave';
 import { profileApi } from '../api/profile';
+import { documentApi } from '../api/documents';
 
 export default function ChatBox({ onLeaveCreated }) {
   const { auth } = useAuth();
@@ -11,7 +12,8 @@ export default function ChatBox({ onLeaveCreated }) {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Hi! I can check your leave balance, look up policy, list your requests, draft a leave request, view your profile, or help update profile fields. What do you need?",
+      content:
+        "Hi! I can check your leave balance, draft a leave request, view/update your profile, or request HR letters (employment, salary, experience, NOC). What do you need?",
     },
   ]);
   const [busy, setBusy] = useState(false);
@@ -47,6 +49,12 @@ export default function ChatBox({ onLeaveCreated }) {
         setDraft({ ...profileDraft.result, kind: 'profile_draft' });
       }
 
+      // Document draft
+      const docDraft = res.tool_results?.find(t => t.name === 'draftDocumentRequest');
+      if (docDraft?.result?.kind === 'document_draft') {
+        setDraft({ ...docDraft.result, kind: 'document_draft' });
+      }
+
       setMessages(m => [...m, { role: 'assistant', content: res.reply || '(no reply)' }]);
     } catch (e) {
       setMessages(m => [...m, { role: 'assistant', content: `❌ ${e.message}` }]);
@@ -65,7 +73,18 @@ export default function ChatBox({ onLeaveCreated }) {
           role: 'assistant',
           content: `✅ Updated ${draft.field.replace(/_/g, ' ')}. The change is saved.`,
         }]);
+      } else if (draft.kind === 'document_draft') {
+        const r = await documentApi.create(auth.token, {
+          doc_type: draft.doc_type,
+          purpose: draft.purpose,
+          ai_drafted: true,
+        });
+        setMessages(m => [...m, {
+          role: 'assistant',
+          content: `📄 Submitted your ${draft.doc_type_label} request (#${r.id}). HR will review it shortly.`,
+        }]);
       } else {
+        // Leave draft (default)
         const r = await leaveApi.create(auth.token, {
           leave_type: draft.leave_type,
           start_date: draft.start_date,
@@ -122,6 +141,35 @@ export default function ChatBox({ onLeaveCreated }) {
               </div>
             ))}
 
+            {/* ============ DOCUMENT DRAFT CARD ============ */}
+            {draft && draft.kind === 'document_draft' && (
+              <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-3 my-2">
+                <p className="text-xs uppercase tracking-wider text-emerald-700 font-semibold">
+                  📄 Letter request — awaiting your confirmation
+                </p>
+                <div className="mt-2 text-sm space-y-1 text-slate-700">
+                  <p><strong>Type:</strong> {draft.doc_type_label}</p>
+                  <p><strong>Purpose:</strong> {draft.purpose}</p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    disabled={busy}
+                    onClick={confirmDraft}
+                    className="bg-emerald-600 text-white text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    ✅ Confirm & Submit
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={cancelDraft}
+                    className="bg-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 font-medium hover:bg-slate-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ============ PROFILE DRAFT CARD ============ */}
             {draft && draft.kind === 'profile_draft' && (
               <div className="bg-indigo-50 border-2 border-indigo-300 rounded-xl p-3 my-2">
@@ -159,7 +207,7 @@ export default function ChatBox({ onLeaveCreated }) {
             )}
 
             {/* ============ LEAVE DRAFT CARD ============ */}
-            {draft && draft.kind !== 'profile_draft' && (
+            {draft && draft.kind !== 'profile_draft' && draft.kind !== 'document_draft' && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 my-2">
                 <p className="text-xs uppercase tracking-wider text-amber-700 font-semibold">
                   📋 Draft — awaiting your confirmation
@@ -214,7 +262,7 @@ export default function ChatBox({ onLeaveCreated }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
-              placeholder="Ask about leave or profile…"
+              placeholder="Ask about leave, profile, or letters…"
               className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
               disabled={busy}
             />
